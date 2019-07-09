@@ -1,0 +1,5 @@
+Flask==1.0.2
+gunicorn==19.9.0
+numpy==1.15.4
+bitarray==0.8.1
+requests==2.20.0

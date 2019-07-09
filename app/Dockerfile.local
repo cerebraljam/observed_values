@@ -1,0 +1,17 @@
+FROM python:3-alpine as builder
+
+RUN apk --no-cache add build-base
+WORKDIR /app
+COPY requirements.txt ./
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+FROM python:3-alpine
+RUN addgroup -g 1000 -S app && \
+    adduser -u 1000 -S app -G app
+USER app
+WORKDIR /app
+COPY --chown=app --from=builder /app/wheels /app/wheels
+RUN pip install --user --no-cache /app/wheels/* #--find-links /app/wheels/*
+COPY . .
+
+CMD [ "python", "main.py" ]
