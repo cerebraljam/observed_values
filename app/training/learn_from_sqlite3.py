@@ -6,7 +6,6 @@ import random
 
 from bitarray import bitarray
 import hashlib
-import base64
 import numpy as np
 import math
 
@@ -15,17 +14,21 @@ import sqlite3
 random.seed(42)
 
 # On how many bits are we going to compress the information
-bitsize = 32
+bitsize = 34
 bit_array_size = 2**bitsize
 bit_array = False
 
-knowledge_filename = "knowledge.r.raw.{}bits".format(bitsize) 
-breachdbs = ['../import/breach.sqlite3', '../import/breach_collection1.sqlite3']
+knowledge_filename = "knowledge.a1345X7_0710.prod.{}bits".format(bitsize)
+
+breachdbs = ['/media/storage/imported/breach_ap_myr_zabugor2.sqlite3', '/media/storage/imported/breach_collection1.sqlite3', '/media/storage/imported/breach_collection3.sqlite3', '/media/storage/imported/breach_collection4.sqlite3','/media/storage/imported/breach_collection5.sqlite3', '/media/storage/imported/breach_compilation2017.sqlite3', '/media/storage/imported/breach_collectionX_jp.sqlite3']
+
 count = 0
 pepper = ''
+emailOnly = False
 
-testing_mode = True
-testing_limit = 1000000
+testing_mode = False
+testing_limit = 100000
+
 if testing_mode:
     print("Starting in testing mode. this can be disabled by setting `testing_mode` to False")
 
@@ -93,7 +96,7 @@ def learn_stuff(lines, record_chance, keep_chance):
                 classifs.append(record)
 
     end = time.time()
-    print("Learned about {} words in {}s. Kept {} samples. total {}".format(records, end-start, len(words), count))
+    print("Learned about {}M words in {:0.2f}s. {:0.2f}/s, total {:0.2f}G".format(records/1000000, end-start, records/(end-start), count/1000000000))
     # print("Keeping all the MD5 values would take ~{}MB".format(math.ceil(memorysize/1024/1024)))
     return {"words":words, "classifs": classifs}
 
@@ -119,19 +122,30 @@ def test_accuracy(samples):
     print("success rate: {}".format(len(successes)/(len(successes) + len(misses))))
 
     print("Details on the missed:")
-    for mi in misses[:10]:
+    for mi in misses[:len(misses) - 10]:
         print(mi)
 
 
 #### THIS IS WHERE WE CONFIGURE HOW THE DATABASE WILL TRAINED
 def transform_data_format(data, pepper):
     email = data[0].encode('utf-8')
-    password = base64.b64decode(data[1]).strip()
-    password = re.sub('\\r\\n', '', password)
+    #password = base64.b64decode(data[1]).strip()
+    password = data[1].strip().encode('utf-8')
 
-    #s = hashlib.sha1(pepper.encode('utf-8') + password).hexdigest().encode('utf-8')
-    s = hashlib.sha1(password).hexdigest().encode('utf-8')
-    return hashlib.sha1(email + s).hexdigest()
+    if emailOnly:
+        if pepper != '':
+             e = hashlib.md5(pepper.encode('utf-8') + email).hexdigest().encode('utf-8')
+        else:
+             print('email only but no salt defined')
+             sys.exit(0)
+
+        return hashlib.sha1(e).hexdigest()
+    else:
+        if pepper != '':
+    	    s = hashlib.sha1(pepper.encode('utf-8') + password).hexdigest().encode('utf-8')
+        else:
+            s = hashlib.sha1(password).hexdigest().encode('utf-8')
+        return hashlib.sha1(email + s).hexdigest()
 
 def load_from_sqlite3(size, bcursor, record_chance, keep_chance, limit = 0):
     global pepper
@@ -148,7 +162,7 @@ def load_from_sqlite3(size, bcursor, record_chance, keep_chance, limit = 0):
             transforms.append(transform_data_format(e, pepper))
 
         short_samples = learn_stuff(transforms, record_chance, keep_chance)
-        samples["words"] = samples["words"]  + short_samples["words"]
+        samples["words"] = samples["words"] + short_samples["words"]
         samples["classifs"] = samples["classifs"] + short_samples["classifs"]
         existings = bcursor.fetchmany(size=size)
     print("total count: {}".format(count))
@@ -157,6 +171,7 @@ def load_from_sqlite3(size, bcursor, record_chance, keep_chance, limit = 0):
 
 for breachdb in breachdbs:
     if os.path.exists(breachdb):
+        print('Loading breach file {}'.format(breachdb))
         bdb = sqlite3.connect(breachdb)
         bcursor = bdb.cursor()
     else:
